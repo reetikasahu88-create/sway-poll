@@ -2,41 +2,71 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+/* Poller App Design System - Modern polling application with beautiful gradients and animations */
 
 @layer base {
   :root {
+    /* Core Brand Colors */
     --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --foreground: 0 0% 0%;
+    --poller-blue: 215 100% 68%;     /* #60A5FA */
+    --poller-black: 0 0% 0%;         /* Pure black */
+    --poller-white: 0 0% 100%;       /* Pure white */
+    
+    /* Logo Bar Colors */
+    --logo-blue: 215 100% 68%;       /* Blue bar */
+    --logo-yellow: 51 100% 62%;      /* Yellow bar */
+    --logo-red: 0 100% 64%;          /* Red bar */
 
+    /* Semantic Colors */
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 0 0% 0%;
+    --card-hover: 215 100% 98%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover-foreground: 0 0% 0%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    --primary: 215 100% 68%;          /* Poller blue */
+    --primary-foreground: 0 0% 100%;
+    --primary-hover: 215 100% 74%;
+    --primary-muted: 215 100% 94%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 220 13% 91%;
+    --secondary-foreground: 0 0% 0%;
+    --secondary-hover: 220 13% 85%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 215 100% 94%;
+    --accent-foreground: 0 0% 0%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --success: 142 71% 45%;
+    --success-foreground: 0 0% 100%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
 
-    --radius: 0.5rem;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 215 100% 68%;
+
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(215 100% 68%), hsl(215 100% 74%));
+    --gradient-hero: linear-gradient(135deg, hsl(0 0% 0%) 0%, hsl(215 100% 20%) 100%);
+    --gradient-card: linear-gradient(145deg, hsl(0 0% 100%) 0%, hsl(215 100% 98%) 100%);
+    
+    /* Shadows */
+    --shadow-sm: 0 1px 2px 0 hsl(0 0% 0% / 0.05);
+    --shadow-md: 0 4px 6px -1px hsl(0 0% 0% / 0.1), 0 2px 4px -2px hsl(0 0% 0% / 0.1);
+    --shadow-lg: 0 10px 15px -3px hsl(0 0% 0% / 0.1), 0 4px 6px -4px hsl(0 0% 0% / 0.1);
+    --shadow-primary: 0 10px 25px -3px hsl(215 100% 68% / 0.3);
+    
+    /* Animation Variables */
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-bounce: all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+
+    --radius: 0.75rem;
 
     --sidebar-background: 0 0% 98%;
 
@@ -100,6 +130,140 @@ All colors MUST be HSL.
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans;
+  }
+}
+
+@layer components {
+  /* Logo Components */
+  .logo-bar {
+    @apply w-1 h-6 rounded-full transition-all duration-300;
+  }
+  
+  .logo-bar-blue {
+    @apply bg-gradient-to-b from-blue-400 to-blue-500;
+  }
+  
+  .logo-bar-yellow {
+    @apply bg-gradient-to-b from-yellow-400 to-yellow-500;
+  }
+  
+  .logo-bar-red {
+    @apply bg-gradient-to-b from-red-400 to-red-500;
+  }
+
+  /* Button Variants */
+  .btn-hero {
+    @apply bg-primary hover:bg-primary-hover text-primary-foreground font-semibold px-8 py-4 rounded-xl transition-all duration-300 transform hover:scale-105 active:scale-95 shadow-lg hover:shadow-primary;
+  }
+  
+  .btn-secondary {
+    @apply border-2 border-primary text-primary hover:bg-primary hover:text-primary-foreground font-semibold px-8 py-4 rounded-xl transition-all duration-300 transform hover:scale-105 active:scale-95;
+  }
+  
+  .btn-ghost {
+    @apply text-primary hover:bg-primary-muted font-medium px-6 py-3 rounded-lg transition-all duration-200;
+  }
+
+  /* Card Components */
+  .poll-card {
+    @apply bg-card hover:bg-card-hover border border-border rounded-xl p-6 transition-all duration-300 transform hover:scale-[1.02] hover:shadow-lg cursor-pointer;
+  }
+  
+  .result-card {
+    @apply bg-gradient-to-br from-card to-card-hover border border-border rounded-xl p-8 shadow-lg;
+  }
+
+  /* Progress Bars */
+  .progress-bar {
+    @apply bg-secondary rounded-full h-6 relative overflow-hidden transition-all duration-500;
+  }
+  
+  .progress-fill {
+    @apply bg-gradient-to-r from-primary to-primary-hover h-full rounded-full transition-all duration-700 ease-out relative;
+  }
+
+  /* Form Elements */
+  .form-input {
+    @apply w-full px-4 py-3 border border-input rounded-lg focus:ring-2 focus:ring-ring focus:border-transparent transition-all duration-200 bg-background;
+  }
+  
+  .form-textarea {
+    @apply w-full px-4 py-3 border border-input rounded-lg focus:ring-2 focus:ring-ring focus:border-transparent transition-all duration-200 bg-background resize-none;
+  }
+
+  /* Animation Classes */
+  .animate-slide-up {
+    animation: slideUp 0.4s ease-out forwards;
+  }
+  
+  .animate-fade-in-up {
+    animation: fadeInUp 0.6s ease-out forwards;
+  }
+  
+  .animate-bounce-in {
+    animation: bounceIn 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards;
+  }
+
+  /* Hero Section */
+  .hero-gradient {
+    background: var(--gradient-hero);
+  }
+  
+  .glass-effect {
+    @apply backdrop-blur-sm bg-white/10 border border-white/20;
+  }
+}
+
+@layer utilities {
+  .text-gradient {
+    background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--primary-hover)));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  
+  .shadow-glow {
+    box-shadow: var(--shadow-primary);
+  }
+}
+
+/* Keyframes */
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes bounceIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.3);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  70% {
+    transform: scale(0.9);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
   }
 }
