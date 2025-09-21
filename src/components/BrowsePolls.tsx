@@ -1,60 +1,121 @@
-import { useState, useMemo } from 'react';
-import { Search, Filter, Calendar, Users, Tag, CheckCircle2 } from 'lucide-react';
+// src/components/BrowsePolls.tsx
+import { useState, useMemo, useEffect } from "react";
+import {
+  Search,
+  Filter,
+  Calendar,
+  Users,
+  Tag,
+  CheckCircle2,
+} from "lucide-react";
+
+const API_BASE = "http://localhost:3000";
+
+interface PollOption {
+  id: string;
+  pollId: string;
+  text: string;
+  voteCount: number;
+  created_at?: string;
+  updated_at?: string;
+}
 
 interface Poll {
   id: string;
   title: string;
-  description: string;
-  options: string[];
-  votes: number[];
-  multipleChoice: boolean;
-  hideResults: boolean;
-  category: string;
-  deadline?: Date;
-  createdAt: Date;
+  description?: string;
+  options: (string | PollOption)[];
+  votes?: number[];
+  multipleChoice?: boolean;
+  hideResults?: boolean;
+  category?: string;
+  deadline?: Date | string | null;
+  createdAt?: Date | string | null;
 }
 
 interface BrowsePollsProps {
-  polls: Poll[];
-  votedPollIds: Set<string>;
+  votedPollIds?: Set<string>;
   onNavigate: (view: string, pollId?: string) => void;
 }
 
-const BrowsePolls = ({ polls, votedPollIds, onNavigate }: BrowsePollsProps) => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('All');
-  const [sortBy, setSortBy] = useState('newest');
+const BrowsePolls = ({
+  votedPollIds = new Set(),
+  onNavigate,
+}: BrowsePollsProps) => {
+  const [polls, setPolls] = useState<Poll[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  const categories = ['All', ...Array.from(new Set(polls.map(poll => poll.category)))];
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("All");
+  const [sortBy, setSortBy] = useState("newest");
+
+  // ✅ Fetch polls from API
+  const fetchPolls = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch(`${API_BASE}/polls`, {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("authToken") || ""}`,
+        },
+      });
+      const data = await res.json();
+      if (data.isSuccess) {
+        setPolls(data.data || []);
+      } else {
+        console.error("Failed to fetch polls", data);
+      }
+    } catch (err) {
+      console.error("Error fetching polls", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPolls();
+  }, []);
+
+  const categories = [
+    "All",
+    ...Array.from(
+      new Set(polls.map((poll) => poll.category || "Uncategorized"))
+    ),
+  ];
 
   const filteredPolls = useMemo(() => {
-    let filtered = polls.filter(poll => {
-      // Search filter
-      const matchesSearch = searchQuery === '' || 
+    let filtered = polls.filter((poll) => {
+      const matchesSearch =
+        searchQuery === "" ||
         poll.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        poll.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        poll.options.some(option => option.toLowerCase().includes(searchQuery.toLowerCase()));
+        poll.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        poll.options?.some((option) => {
+          const text = typeof option === "string" ? option : option.text;
+          return text.toLowerCase().includes(searchQuery.toLowerCase());
+        });
 
-      // Category filter
-      const matchesCategory = selectedCategory === 'All' || poll.category === selectedCategory;
+      const matchesCategory =
+        selectedCategory === "All" || poll.category === selectedCategory;
 
       return matchesSearch && matchesCategory;
     });
 
-    // Sort
     filtered.sort((a, b) => {
+      const dateA = new Date(a.createdAt || "").getTime();
+      const dateB = new Date(b.createdAt || "").getTime();
+
       switch (sortBy) {
-        case 'newest':
-          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-        case 'oldest':
-          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-        case 'most-votes':
-          const aVotes = a.votes.reduce((sum, votes) => sum + votes, 0);
-          const bVotes = b.votes.reduce((sum, votes) => sum + votes, 0);
+        case "newest":
+          return dateB - dateA;
+        case "oldest":
+          return dateA - dateB;
+        case "most-votes":
+          const aVotes = (a.votes || []).reduce((sum, v) => sum + v, 0);
+          const bVotes = (b.votes || []).reduce((sum, v) => sum + v, 0);
           return bVotes - aVotes;
-        case 'least-votes':
-          const aVotesLeast = a.votes.reduce((sum, votes) => sum + votes, 0);
-          const bVotesLeast = b.votes.reduce((sum, votes) => sum + votes, 0);
+        case "least-votes":
+          const aVotesLeast = (a.votes || []).reduce((sum, v) => sum + v, 0);
+          const bVotesLeast = (b.votes || []).reduce((sum, v) => sum + v, 0);
           return aVotesLeast - bVotesLeast;
         default:
           return 0;
@@ -64,20 +125,26 @@ const BrowsePolls = ({ polls, votedPollIds, onNavigate }: BrowsePollsProps) => {
     return filtered;
   }, [polls, searchQuery, selectedCategory, sortBy]);
 
-  const formatDate = (date: Date) => {
-    return new Intl.DateTimeFormat('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    }).format(date);
+  const formatDate = (date: Date | string | null | undefined) => {
+    if (!date) return "N/A";
+    const parsed = new Date(date);
+    if (isNaN(parsed.getTime())) return "Invalid Date";
+
+    return new Intl.DateTimeFormat("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }).format(parsed);
   };
 
   const getTotalVotes = (poll: Poll) => {
-    return poll.votes.reduce((sum, votes) => sum + votes, 0);
+    return (poll.votes || []).reduce((sum, votes) => sum + votes, 0);
   };
 
   const isExpired = (poll: Poll) => {
-    return poll.deadline && new Date() > poll.deadline;
+    if (!poll.deadline) return false;
+    const deadlineDate = new Date(poll.deadline);
+    return !isNaN(deadlineDate.getTime()) && new Date() > deadlineDate;
   };
 
   return (
@@ -116,8 +183,10 @@ const BrowsePolls = ({ polls, votedPollIds, onNavigate }: BrowsePollsProps) => {
                 onChange={(e) => setSelectedCategory(e.target.value)}
                 className="form-input pl-10 appearance-none"
               >
-                {categories.map(category => (
-                  <option key={category} value={category}>{category}</option>
+                {categories.map((category, idx) => (
+                  <option key={`${category}-${idx}`} value={category}>
+                    {category}
+                  </option>
                 ))}
               </select>
             </div>
@@ -139,11 +208,12 @@ const BrowsePolls = ({ polls, votedPollIds, onNavigate }: BrowsePollsProps) => {
         {/* Results Count */}
         <div className="flex justify-between items-center mb-6">
           <p className="text-gray-600">
-            {filteredPolls.length} poll{filteredPolls.length !== 1 ? 's' : ''} found
+            {filteredPolls.length} poll
+            {filteredPolls.length !== 1 ? "s" : ""} found
           </p>
-          
+
           <button
-            onClick={() => onNavigate('create')}
+            onClick={() => onNavigate("create")}
             className="btn-hero text-sm"
           >
             Create New Poll
@@ -151,22 +221,22 @@ const BrowsePolls = ({ polls, votedPollIds, onNavigate }: BrowsePollsProps) => {
         </div>
 
         {/* Polls Grid */}
-        {filteredPolls.length === 0 ? (
+        {loading ? (
+          <p className="text-center text-gray-500 py-10">Loading polls...</p>
+        ) : filteredPolls.length === 0 ? (
           <div className="text-center py-16">
             <div className="bg-gray-100 rounded-full w-24 h-24 flex items-center justify-center mx-auto mb-6">
               <Search className="w-12 h-12 text-gray-400" />
             </div>
-            <h3 className="text-xl font-semibold text-gray-600 mb-2">No polls found</h3>
+            <h3 className="text-xl font-semibold text-gray-600 mb-2">
+              No polls found
+            </h3>
             <p className="text-gray-500 mb-6">
-              {searchQuery || selectedCategory !== 'All' 
-                ? "Try adjusting your search or filters" 
-                : "Be the first to create a poll!"
-              }
+              {searchQuery || selectedCategory !== "All"
+                ? "Try adjusting your search or filters"
+                : "Be the first to create a poll!"}
             </p>
-            <button
-              onClick={() => onNavigate('create')}
-              className="btn-hero"
-            >
+            <button onClick={() => onNavigate("create")} className="btn-hero">
               Create First Poll
             </button>
           </div>
@@ -176,13 +246,14 @@ const BrowsePolls = ({ polls, votedPollIds, onNavigate }: BrowsePollsProps) => {
               const totalVotes = getTotalVotes(poll);
               const hasVoted = votedPollIds.has(poll.id);
               const expired = isExpired(poll);
-              
+
               return (
                 <div
                   key={poll.id}
                   className="poll-card animate-slide-up"
                   style={{ animationDelay: `${index * 0.1}s` }}
-                  onClick={() => onNavigate('poll', poll.id)}
+                  // ✅ navigate same as CreatePoll
+                  onClick={() => onNavigate("results", poll.id)}
                 >
                   {/* Poll Header */}
                   <div className="flex items-start justify-between mb-4">
@@ -196,7 +267,7 @@ const BrowsePolls = ({ polls, votedPollIds, onNavigate }: BrowsePollsProps) => {
                         </p>
                       )}
                     </div>
-                    
+
                     {/* Status Badges */}
                     <div className="flex flex-col gap-2 ml-3">
                       {hasVoted && (
@@ -215,14 +286,22 @@ const BrowsePolls = ({ polls, votedPollIds, onNavigate }: BrowsePollsProps) => {
 
                   {/* Poll Options Preview */}
                   <div className="space-y-2 mb-4">
-                    {poll.options.slice(0, 3).map((option, optionIndex) => (
-                      <div key={optionIndex} className="bg-gray-50 px-3 py-2 rounded-lg text-sm text-gray-700">
-                        {option}
-                      </div>
-                    ))}
-                    {poll.options.length > 3 && (
+                    {(poll.options || []).slice(0, 3).map((option, idx) => {
+                      const text =
+                        typeof option === "string" ? option : option.text;
+                      return (
+                        <div
+                          key={`${poll.id}-option-${idx}`}
+                          className="bg-gray-50 px-3 py-2 rounded-lg text-sm text-gray-700"
+                        >
+                          {text}
+                        </div>
+                      );
+                    })}
+                    {poll.options && poll.options.length > 3 && (
                       <div className="text-xs text-gray-500 pl-3">
-                        +{poll.options.length - 3} more option{poll.options.length - 3 !== 1 ? 's' : ''}
+                        +{poll.options.length - 3} more option
+                        {poll.options.length - 3 !== 1 ? "s" : ""}
                       </div>
                     )}
                   </div>
@@ -232,14 +311,14 @@ const BrowsePolls = ({ polls, votedPollIds, onNavigate }: BrowsePollsProps) => {
                     <div className="flex items-center gap-4">
                       <div className="flex items-center gap-1">
                         <Tag className="w-3 h-3" />
-                        <span>{poll.category}</span>
+                        <span>{poll.category || "Uncategorized"}</span>
                       </div>
                       <div className="flex items-center gap-1">
                         <Users className="w-3 h-3" />
                         <span>{totalVotes}</span>
                       </div>
                     </div>
-                    
+
                     <div className="flex items-center gap-1">
                       <Calendar className="w-3 h-3" />
                       <span>{formatDate(poll.createdAt)}</span>

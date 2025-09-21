@@ -1,202 +1,125 @@
-import { useState, useEffect } from 'react';
-import Header from './Header';
-import HomePage from './HomePage';
-import CreatePoll from './CreatePoll';
-import PollVoting from './PollVoting';
-import LiveResults from './LiveResults';
-import BrowsePolls from './BrowsePolls';
-import { toast } from '@/hooks/use-toast';
+// src/components/PollerApp.tsx
+import { useState, useEffect } from "react";
+import Header from "./Header";
+import HomePage from "./HomePage";
+import CreatePoll from "./CreatePoll";
+import PollVoting from "./PollVoting";
+import LiveResults from "./LiveResults";
+import BrowsePolls from "./BrowsePolls";
+import { toast } from "@/hooks/use-toast";
 
-interface Poll {
+interface PollSummary {
   id: string;
   title: string;
-  description: string;
-  options: string[];
-  votes: number[];
-  multipleChoice: boolean;
-  hideResults: boolean;
-  category: string;
-  deadline?: Date;
-  createdAt: Date;
+  status: string;
 }
 
+const API_BASE = "http://localhost:3000"; // adjust if deployed
+
 const PollerApp = () => {
-  const [currentView, setCurrentView] = useState('home');
+  const [currentView, setCurrentView] = useState("home");
   const [selectedPollId, setSelectedPollId] = useState<string | null>(null);
-  const [polls, setPolls] = useState<Poll[]>([]);
-  const [votedPollIds, setVotedPollIds] = useState<Set<string>>(new Set());
+  const [summaries, setSummaries] = useState<PollSummary[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  // Load data from localStorage on mount
+  // Fetch lightweight poll summaries (used in Home & Browse)
+  const fetchSummaries = async () => {
+    try {
+      setLoading(true);
+      const res = await fetch(`${API_BASE}/polls/summaries`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("authToken") || ""}`,
+        },
+      });
+
+      if (res.status === 401) {
+        toast({
+          title: "Unauthorized",
+          description: "Please login to view polls.",
+          variant: "destructive",
+        });
+        setSummaries([]);
+        return;
+      }
+
+      const data = await res.json();
+      if (data.isSuccess) {
+        setSummaries(data.polls || []);
+      } else {
+        console.error("Failed to fetch summaries", data);
+      }
+    } catch (err) {
+      console.error("Error fetching summaries", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const savedPolls = localStorage.getItem('poller-polls');
-    const savedVotedIds = localStorage.getItem('poller-voted-ids');
-
-    if (savedPolls) {
-      try {
-        const parsedPolls = JSON.parse(savedPolls);
-        // Convert date strings back to Date objects
-        const pollsWithDates = parsedPolls.map((poll: any) => ({
-          ...poll,
-          createdAt: new Date(poll.createdAt),
-          deadline: poll.deadline ? new Date(poll.deadline) : undefined,
-        }));
-        setPolls(pollsWithDates);
-      } catch (error) {
-        console.error('Failed to load polls:', error);
-      }
-    }
-
-    if (savedVotedIds) {
-      try {
-        const parsedVotedIds = JSON.parse(savedVotedIds);
-        setVotedPollIds(new Set(parsedVotedIds));
-      } catch (error) {
-        console.error('Failed to load voted IDs:', error);
-      }
-    }
+    fetchSummaries();
   }, []);
-
-  // Save data to localStorage whenever it changes
-  useEffect(() => {
-    localStorage.setItem('poller-polls', JSON.stringify(polls));
-  }, [polls]);
-
-  useEffect(() => {
-    localStorage.setItem('poller-voted-ids', JSON.stringify(Array.from(votedPollIds)));
-  }, [votedPollIds]);
 
   const handleNavigate = (view: string, pollId?: string) => {
     setCurrentView(view);
     setSelectedPollId(pollId || null);
   };
 
-  const handlePollCreated = (poll: Poll) => {
-    setPolls(prev => [poll, ...prev]);
+  // Called when poll is created in <CreatePoll />
+  const handlePollCreated = (poll: PollSummary) => {
+    setSummaries((prev) => [poll, ...prev]);
+    toast({ title: "Poll Created", description: "Your poll is live!" });
+    handleNavigate("results", poll.id); // ✅ go directly to live results
   };
-
-  const handleVote = (pollId: string, optionIndexes: number[]) => {
-    // Check if user has already voted
-    if (votedPollIds.has(pollId)) {
-      toast({
-        title: "Already Voted",
-        description: "You have already voted in this poll.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Update poll votes
-    setPolls(prev => prev.map(poll => {
-      if (poll.id === pollId) {
-        const newVotes = [...poll.votes];
-        optionIndexes.forEach(index => {
-          if (index >= 0 && index < newVotes.length) {
-            newVotes[index]++;
-          }
-        });
-        return { ...poll, votes: newVotes };
-      }
-      return poll;
-    }));
-
-    // Mark as voted
-    setVotedPollIds(prev => new Set([...prev, pollId]));
-
-    // Show success message
-    toast({
-      title: "Vote Recorded!",
-      description: "Thank you for participating in this poll.",
-    });
-  };
-
-  const selectedPoll = selectedPollId ? polls.find(poll => poll.id === selectedPollId) : null;
 
   const renderCurrentView = () => {
     switch (currentView) {
-      case 'home':
-        return <HomePage onNavigate={handleNavigate} />;
-      
-      case 'create':
+      case "home":
+        return <HomePage polls={summaries} onNavigate={handleNavigate} />;
+
+      case "create":
         return (
-          <CreatePoll 
-            onPollCreated={handlePollCreated} 
+          <CreatePoll
+            onPollCreated={handlePollCreated}
             onNavigate={handleNavigate}
           />
         );
-      
-      case 'browse':
+
+      case "browse":
         return (
-          <BrowsePolls 
-            polls={polls} 
-            votedPollIds={votedPollIds}
+          <BrowsePolls
+            polls={summaries}
             onNavigate={handleNavigate}
+            loading={loading}
           />
         );
-      
-      case 'poll':
-        if (!selectedPoll) {
-          return (
-            <div className="min-h-screen flex items-center justify-center">
-              <div className="text-center">
-                <h2 className="text-2xl font-bold text-poller-black mb-4">Poll Not Found</h2>
-                <p className="text-gray-600 mb-6">The poll you're looking for doesn't exist.</p>
-                <button 
-                  onClick={() => handleNavigate('browse')}
-                  className="btn-hero"
-                >
-                  Browse Polls
-                </button>
-              </div>
-            </div>
-          );
+
+      case "poll":
+        if (!selectedPollId) {
+          return <div className="p-6 text-center">Poll Not Found</div>;
         }
         return (
-          <PollVoting 
-            poll={selectedPoll}
-            hasVoted={votedPollIds.has(selectedPoll.id)}
-            onVote={handleVote}
-            onNavigate={handleNavigate}
-          />
+          <PollVoting pollId={selectedPollId} onNavigate={handleNavigate} />
         );
-      
-      case 'results':
-        if (!selectedPoll) {
-          return (
-            <div className="min-h-screen flex items-center justify-center">
-              <div className="text-center">
-                <h2 className="text-2xl font-bold text-poller-black mb-4">Poll Not Found</h2>
-                <p className="text-gray-600 mb-6">The poll results you're looking for don't exist.</p>
-                <button 
-                  onClick={() => handleNavigate('browse')}
-                  className="btn-hero"
-                >
-                  Browse Polls
-                </button>
-              </div>
-            </div>
-          );
+
+      case "results":
+        if (!selectedPollId) {
+          return <div className="p-6 text-center">Poll Not Found</div>;
         }
         return (
-          <LiveResults 
-            poll={selectedPoll}
-            onNavigate={handleNavigate}
-          />
+          <LiveResults pollId={selectedPollId} onNavigate={handleNavigate} />
         );
-      
+
       default:
-        return <HomePage onNavigate={handleNavigate} />;
+        return <HomePage polls={summaries} onNavigate={handleNavigate} />;
     }
   };
 
   return (
     <div className="min-h-screen bg-background">
-      <Header 
-        currentView={currentView} 
-        onNavigate={handleNavigate} 
-      />
-      <main>
-        {renderCurrentView()}
-      </main>
+      <Header currentView={currentView} onNavigate={handleNavigate} />
+      <main>{renderCurrentView()}</main>
     </div>
   );
 };

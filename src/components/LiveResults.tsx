@@ -1,84 +1,192 @@
-import { useState } from 'react';
-import { BarChart3, PieChart, ArrowLeft, TrendingUp, Users, Brain } from 'lucide-react';
-import { PieChart as RechartsPieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+// src/components/LiveResults.tsx
+import { useState, useEffect } from "react";
+import {
+  BarChart3,
+  PieChart,
+  ArrowLeft,
+  TrendingUp,
+  Users,
+  Brain,
+} from "lucide-react";
+import {
+  PieChart as RechartsPieChart,
+  Pie,
+  Cell,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Legend,
+} from "recharts";
+import { toast } from "@/hooks/use-toast";
+
+const API_BASE = "http://localhost:3000";
+
+interface PollOption {
+  id: string;
+  text: string;
+  voteCount: number;
+}
 
 interface Poll {
   id: string;
   title: string;
-  description: string;
-  options: string[];
-  votes: number[];
-  multipleChoice: boolean;
-  hideResults: boolean;
-  category: string;
-  deadline?: Date;
-  createdAt: Date;
+  description?: string;
+  options: PollOption[];
+  status?: string;
+  expiresAt?: string;
+  createdAt?: string;
 }
 
 interface LiveResultsProps {
-  poll: Poll;
+  pollId: string;
   onNavigate: (view: string, pollId?: string) => void;
 }
 
-const LiveResults = ({ poll, onNavigate }: LiveResultsProps) => {
-  const [viewType, setViewType] = useState<'bar' | 'pie'>('bar');
-  
-  const totalVotes = poll.votes.reduce((sum, votes) => sum + votes, 0);
-  const maxVotes = Math.max(...poll.votes);
-  
-  // Chart colors
+const LiveResults = ({ pollId, onNavigate }: LiveResultsProps) => {
+  const [poll, setPoll] = useState<Poll | null>(null);
+  const [viewType, setViewType] = useState<"bar" | "pie">("bar");
+  const [loading, setLoading] = useState(true);
+
   const chartColors = [
-    '#60A5FA', '#34D399', '#F59E0B', '#EF4444', '#8B5CF6', 
-    '#F97316', '#06B6D4', '#84CC16', '#EC4899', '#6B7280'
+    "#60A5FA",
+    "#34D399",
+    "#F59E0B",
+    "#EF4444",
+    "#8B5CF6",
+    "#F97316",
+    "#06B6D4",
+    "#84CC16",
+    "#EC4899",
+    "#6B7280",
   ];
 
-  // Prepare data for charts
-  const chartData = poll.options.map((option, index) => ({
-    name: option,
-    votes: poll.votes[index],
-    percentage: totalVotes > 0 ? ((poll.votes[index] / totalVotes) * 100) : 0,
-    color: chartColors[index % chartColors.length]
-  })).sort((a, b) => b.votes - a.votes); // Sort by vote count descending
+  useEffect(() => {
+    const fetchResults = async () => {
+      try {
+        setLoading(true);
 
-  // Generate AI insights
-  const generateInsights = () => {
+        const [resultsRes, analyticsRes] = await Promise.all([
+          fetch(`${API_BASE}/polls/${pollId}/results`, {
+            headers: {
+              Authorization: `Bearer ${
+                localStorage.getItem("authToken") || ""
+              }`,
+            },
+          }),
+          fetch(`${API_BASE}/polls/${pollId}/analytics`, {
+            headers: {
+              Authorization: `Bearer ${
+                localStorage.getItem("authToken") || ""
+              }`,
+            },
+          }),
+        ]);
+
+        if (!resultsRes.ok) throw new Error("Failed to fetch results");
+        if (!analyticsRes.ok) throw new Error("Failed to fetch analytics");
+
+        const resultsData = await resultsRes.json();
+        const analyticsData = await analyticsRes.json();
+        console.log("Results:", resultsData);
+        console.log("Analytics:", analyticsData);
+
+        // ✅ normalize poll shape
+        const pollInfo = resultsData.poll || resultsData.results?.poll || {}; // fallback if poll isn't included
+
+        setPoll({
+          id: pollInfo.id || pollId,
+          title: pollInfo.title || "Untitled Poll",
+          description: pollInfo.description || "No description provided",
+          status: pollInfo.status,
+          createdAt: pollInfo.createdAt,
+          expiresAt: pollInfo.expiresAt,
+          options: resultsData.results?.options || resultsData.options || [],
+        });
+
+        console.log("Analytics:", analyticsData.analytics);
+      } catch (err) {
+        console.error(err);
+        toast({
+          title: "Error",
+          description: "Could not fetch live poll results.",
+          variant: "destructive",
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchResults();
+    const interval = setInterval(fetchResults, 5000);
+    return () => clearInterval(interval);
+  }, [pollId]);
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <p className="text-gray-600">Loading live results...</p>
+      </div>
+    );
+  }
+
+  if (!poll) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <p className="text-gray-600">Poll not found.</p>
+      </div>
+    );
+  }
+
+  const totalVotes = poll.options.reduce(
+    (sum, opt) => sum + (opt.voteCount || 0),
+    0
+  );
+
+  const chartData = poll.options
+    .map((opt, index) => ({
+      id: opt.id,
+      name: opt.text,
+      votes: opt.voteCount,
+      percentage: totalVotes > 0 ? (opt.voteCount / totalVotes) * 100 : 0,
+      color: chartColors[index % chartColors.length],
+    }))
+    .sort((a, b) => b.votes - a.votes);
+
+  const insights = (() => {
     if (totalVotes === 0) return ["No votes have been cast yet."];
-    
-    const insights = [];
+
     const winner = chartData[0];
     const runnerUp = chartData[1];
-    
-    // Winner insight
-    if (winner.percentage > 50) {
-      insights.push(`${winner.name} is the clear winner with ${winner.percentage.toFixed(1)}% of votes`);
-    } else if (winner.percentage > 30) {
-      insights.push(`${winner.name} leads with ${winner.percentage.toFixed(1)}% of votes`);
-    } else {
-      insights.push("The results are very close with no clear winner");
-    }
-    
-    // Competition insight
-    if (runnerUp && Math.abs(winner.percentage - runnerUp.percentage) < 5) {
-      insights.push(`It's a tight race between "${winner.name}" and "${runnerUp.name}"`);
-    }
-    
-    // Participation insight
-    if (totalVotes > 100) {
-      insights.push(`High engagement with ${totalVotes.toLocaleString()} total votes`);
-    } else if (totalVotes > 10) {
-      insights.push(`Growing participation with ${totalVotes} votes so far`);
-    }
-    
-    // Distribution insight
-    const topTwoPercentage = chartData.slice(0, 2).reduce((sum, item) => sum + item.percentage, 0);
-    if (topTwoPercentage > 80) {
-      insights.push("Most voters prefer the top two options");
-    }
-    
-    return insights;
-  };
+    const list: string[] = [];
 
-  const insights = generateInsights();
+    if (winner.percentage > 50) {
+      list.push(
+        `${winner.name} is the clear winner with ${winner.percentage.toFixed(
+          1
+        )}% of votes`
+      );
+    } else if (winner.percentage > 30) {
+      list.push(`${winner.name} leads with ${winner.percentage.toFixed(1)}%`);
+    } else {
+      list.push("The results are close with no clear winner.");
+    }
+
+    if (runnerUp && Math.abs(winner.percentage - runnerUp.percentage) < 5) {
+      list.push(
+        `It's a tight race between "${winner.name}" and "${runnerUp.name}"`
+      );
+    }
+
+    if (totalVotes > 50) {
+      list.push(`Strong engagement with ${totalVotes} total votes`);
+    }
+
+    return list;
+  })();
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-primary-muted/10 py-8">
@@ -86,235 +194,105 @@ const LiveResults = ({ poll, onNavigate }: LiveResultsProps) => {
         {/* Header */}
         <div className="flex items-center justify-between mb-8">
           <button
-            onClick={() => onNavigate('poll', poll.id)}
+            onClick={() => onNavigate("poll", poll.id)}
             className="btn-ghost"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Poll
           </button>
-          
+
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2 text-sm text-gray-600">
               <div className="w-3 h-3 bg-success rounded-full animate-pulse"></div>
               Live Results
             </div>
-            
             <div className="flex bg-secondary rounded-lg p-1">
               <button
-                onClick={() => setViewType('bar')}
-                className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                  viewType === 'bar' 
-                    ? 'bg-background text-primary shadow-sm' 
-                    : 'text-gray-600 hover:text-primary'
+                onClick={() => setViewType("bar")}
+                className={`px-3 py-2 rounded-md text-sm ${
+                  viewType === "bar"
+                    ? "bg-background text-primary shadow-sm"
+                    : "text-gray-600 hover:text-primary"
                 }`}
               >
-                <BarChart3 className="w-4 h-4" />
-                Bar Chart
+                <BarChart3 className="w-4 h-4 inline mr-1" />
+                Bar
               </button>
               <button
-                onClick={() => setViewType('pie')}
-                className={`flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                  viewType === 'pie' 
-                    ? 'bg-background text-primary shadow-sm' 
-                    : 'text-gray-600 hover:text-primary'
+                onClick={() => setViewType("pie")}
+                className={`px-3 py-2 rounded-md text-sm ${
+                  viewType === "pie"
+                    ? "bg-background text-primary shadow-sm"
+                    : "text-gray-600 hover:text-primary"
                 }`}
               >
-                <PieChart className="w-4 h-4" />
-                Pie Chart
+                <PieChart className="w-4 h-4 inline mr-1" />
+                Pie
               </button>
             </div>
           </div>
         </div>
 
+        {/* Results + Insights */}
         <div className="grid lg:grid-cols-3 gap-8">
-          {/* Results Panel */}
-          <div className="lg:col-span-2">
-            <div className="result-card">
-              <div className="text-center mb-8">
-                <h1 className="text-3xl font-bold text-poller-black mb-4">
-                  Real-time Polling Results
-                </h1>
-                <h2 className="text-xl text-gray-700 mb-2">{poll.title}</h2>
-                {poll.description && (
-                  <p className="text-gray-600">{poll.description}</p>
+          {/* Chart Section */}
+          <div className="lg:col-span-2 result-card">
+            <h2 className="text-2xl font-bold mb-4">{poll.title}</h2>
+            <p className="text-gray-600 mb-6">{poll.description}</p>
+
+            <div className="h-80">
+              <ResponsiveContainer width="100%" height="100%">
+                {viewType === "pie" ? (
+                  <RechartsPieChart>
+                    <Pie
+                      data={chartData}
+                      dataKey="votes"
+                      nameKey="name"
+                      outerRadius={100}
+                      label={({ name, percentage }) =>
+                        `${name}: ${percentage.toFixed(1)}%`
+                      }
+                    >
+                      {chartData.map((entry) => (
+                        <Cell key={entry.id} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(v) => [`${v} votes`, "Votes"]} />
+                    <Legend />
+                  </RechartsPieChart>
+                ) : (
+                  <BarChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis />
+                    <Tooltip formatter={(v) => [`${v} votes`, "Votes"]} />
+                    <Bar dataKey="votes">
+                      {chartData.map((entry) => (
+                        <Cell key={entry.id} fill={entry.color} />
+                      ))}
+                    </Bar>
+                  </BarChart>
                 )}
-              </div>
+              </ResponsiveContainer>
+            </div>
 
-              {/* Bar Chart Results */}
-              {viewType === 'bar' && (
-                <div className="space-y-4 mb-8">
-                  {chartData.map((item, index) => (
-                    <div key={index} className="animate-slide-up" style={{ animationDelay: `${index * 0.1}s` }}>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="font-medium text-poller-black">{item.name}</span>
-                        <span className="text-sm font-semibold text-gray-700">
-                          {item.percentage.toFixed(1)}% ({item.votes.toLocaleString()} votes)
-                        </span>
-                      </div>
-                      <div className="progress-bar">
-                        <div 
-                          className="progress-fill"
-                          style={{ 
-                            width: `${item.percentage}%`,
-                            backgroundColor: item.color,
-                            backgroundImage: `linear-gradient(90deg, ${item.color}, ${item.color}dd)`
-                          }}
-                        >
-                          <div className="absolute inset-0 bg-gradient-to-r from-transparent to-white/20"></div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Recharts Visualization */}
-              {totalVotes > 0 && (
-                <div className="h-80 mb-8">
-                  <ResponsiveContainer width="100%" height="100%">
-                    {viewType === 'pie' ? (
-                      <RechartsPieChart>
-                        <Pie
-                          data={chartData}
-                          cx="50%"
-                          cy="50%"
-                          labelLine={false}
-                          label={({ name, percentage }) => `${name}: ${percentage.toFixed(1)}%`}
-                          outerRadius={100}
-                          fill="#8884d8"
-                          dataKey="votes"
-                        >
-                          {chartData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.color} />
-                          ))}
-                        </Pie>
-                        <Tooltip 
-                          formatter={(value: any, name: any) => [`${value} votes`, 'Votes']}
-                          labelFormatter={(label: any) => `${label}`}
-                        />
-                        <Legend 
-                          verticalAlign="bottom" 
-                          height={36}
-                          formatter={(value) => {
-                            const item = chartData.find(d => d.name === value);
-                            return `${value} (${(item?.percentage || 0).toFixed(1)}%)`;
-                          }}
-                        />
-                      </RechartsPieChart>
-                    ) : (
-                      <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                        <XAxis 
-                          dataKey="name" 
-                          angle={-45}
-                          textAnchor="end"
-                          height={80}
-                          interval={0}
-                          fontSize={12}
-                        />
-                        <YAxis />
-                        <Tooltip 
-                          formatter={(value: any) => [`${value} votes`, 'Votes']}
-                          labelFormatter={(label: any) => `${label}`}
-                        />
-                        <Bar dataKey="votes" radius={[4, 4, 0, 0]}>
-                          {chartData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.color} />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    )}
-                  </ResponsiveContainer>
-                </div>
-              )}
-
-              {/* Total Votes */}
-              <div className="text-center py-6 bg-primary-muted/30 rounded-xl">
-                <div className="flex items-center justify-center gap-2 text-2xl font-bold text-poller-black">
-                  <Users className="w-6 h-6" />
-                  {totalVotes.toLocaleString()} Total Votes
-                </div>
-              </div>
+            <div className="text-center py-4">
+              <Users className="w-5 h-5 inline mr-1" />
+              <span className="font-semibold">{totalVotes} total votes</span>
             </div>
           </div>
 
-          {/* Insights Panel */}
-          <div className="space-y-6">
-            {/* AI Insights */}
-            <div className="result-card">
-              <div className="flex items-center gap-2 mb-4">
-                <Brain className="w-5 h-5 text-primary" />
-                <h3 className="text-lg font-semibold text-poller-black">AI Insights</h3>
+          {/* Insights */}
+          <div className="result-card space-y-4">
+            <h3 className="flex items-center gap-2 text-lg font-semibold">
+              <Brain className="w-5 h-5 text-primary" /> AI Insights
+            </h3>
+            {insights.map((txt, i) => (
+              <div key={i} className="flex gap-2 text-sm text-gray-700">
+                <TrendingUp className="w-4 h-4 text-primary mt-0.5" />
+                {txt}
               </div>
-              <div className="space-y-3">
-                {insights.map((insight, index) => (
-                  <div key={index} className="flex items-start gap-2">
-                    <TrendingUp className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-                    <p className="text-sm text-gray-700">{insight}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Quick Stats */}
-            <div className="result-card">
-              <h3 className="text-lg font-semibold text-poller-black mb-4">Quick Stats</h3>
-              <div className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Leading Option:</span>
-                  <span className="font-medium text-poller-black">
-                    {chartData[0]?.name || 'N/A'}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Lead Margin:</span>
-                  <span className="font-medium text-primary">
-                    {chartData[0]?.percentage.toFixed(1) || '0'}%
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Total Options:</span>
-                  <span className="font-medium text-poller-black">{poll.options.length}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Poll Type:</span>
-                  <span className="font-medium text-poller-black">
-                    {poll.multipleChoice ? 'Multiple Choice' : 'Single Choice'}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="result-card">
-              <div className="space-y-3">
-                <button
-                  onClick={() => navigator.clipboard.writeText(window.location.href)}
-                  className="w-full btn-secondary text-sm"
-                >
-                  Share Poll
-                </button>
-                <button
-                  onClick={() => {
-                    const data = {
-                      poll: poll.title,
-                      results: chartData,
-                      totalVotes,
-                      timestamp: new Date().toISOString()
-                    };
-                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = `poll-results-${poll.id}.json`;
-                    a.click();
-                  }}
-                  className="w-full btn-ghost text-sm"
-                >
-                  Export Results
-                </button>
-              </div>
-            </div>
+            ))}
           </div>
         </div>
       </div>
