@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { BarChart3, PieChart, ArrowLeft, TrendingUp, Users, Brain } from 'lucide-react';
-import { PieChart as RechartsPieChart, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { PieChart as RechartsPieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 interface Poll {
   id: string;
@@ -174,14 +174,31 @@ const LiveResults = ({ poll, onNavigate }: LiveResultsProps) => {
                   <ResponsiveContainer width="100%" height="100%">
                     {viewType === 'pie' ? (
                       <RechartsPieChart>
-                        <RechartsPieChart data={chartData}>
+                        <Pie
+                          data={chartData}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          label={({ name, percentage }) => `${name}: ${percentage.toFixed(1)}%`}
+                          outerRadius={100}
+                          fill="#8884d8"
+                          dataKey="votes"
+                        >
                           {chartData.map((entry, index) => (
                             <Cell key={`cell-${index}`} fill={entry.color} />
                           ))}
-                        </RechartsPieChart>
+                        </Pie>
                         <Tooltip 
-                          formatter={(value: any, name: any) => [`${value} votes`, name]}
-                          labelFormatter={(label: any) => `${label}: ${((chartData.find(d => d.name === label)?.percentage || 0)).toFixed(1)}%`}
+                          formatter={(value: any, name: any) => [`${value} votes`, 'Votes']}
+                          labelFormatter={(label: any) => `${label}`}
+                        />
+                        <Legend 
+                          verticalAlign="bottom" 
+                          height={36}
+                          formatter={(value) => {
+                            const item = chartData.find(d => d.name === value);
+                            return `${value} (${(item?.percentage || 0).toFixed(1)}%)`;
+                          }}
                         />
                       </RechartsPieChart>
                     ) : (
